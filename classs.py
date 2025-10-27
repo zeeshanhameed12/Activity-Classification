@@ -1,0 +1,139 @@
+import pm4py
+import pandas as pd
+# calculating time for execution of whole code
+import time
+
+start_time = time.time()
+
+
+# Load the OCEL log
+#filename = "selfocel.xml"
+filename = "post_ocel_inventory_management.xml"
+ocel = pm4py.read_ocel2_xml(filename)
+
+# Extract the event-to-object relationship
+relations = ocel.relations
+activities_in_ocel = ocel.events["ocel:activity"].unique()
+print("Activities in OCEL:", activities_in_ocel)
+# getting the object types in the OCEL
+print("Object types in OCEL:", relations["ocel:type"].unique())
+#Users will select the object types for which they want to find the events and associated activities
+object_id1 =  input("Enter the first object type: ")
+object_id2 =  input("Enter the second object type: ")
+# Creating a list to store the rows for the relationship table
+relationship_data = []
+# Initializing a set to track unique object types
+object_types = set()
+# Now traverse through the relations and process event-to-object data
+for _, row in relations.iterrows():
+    event_id = row["ocel:eid"]
+    activity = row["ocel:activity"]
+    object_id = row["ocel:oid"]
+    object_type = row["ocel:type"]
+    # Add object type to the set of object types
+    object_types.add(object_type)
+    # Find if the event already exists in the relationship_data
+    event_row = next((entry for entry in relationship_data if entry["event_id"] == event_id), None)
+    if event_row is None:
+        # Create a new entry for this event
+        event_row = {"event_id": event_id, "activity": activity}
+        relationship_data.append(event_row)
+    # Add the object_id to the respective object type column
+    if object_type not in event_row:
+        event_row[object_type] = []
+    # Append the object_id to the list for the current object type
+    event_row[object_type].append(object_id)
+# Convert the relationship data into a DataFrame
+relationship_df = pd.DataFrame(relationship_data)
+# getting a separate table for each activity in the OCEL. the list of activities is in the variable activities_in_ocel
+activity_tables = {}
+for activity in relationship_df["activity"].unique():
+    activity_tables[activity] = relationship_df[relationship_df["activity"] == activity]
+# Now activity_tables contains a DataFrame for each activity with the respective object IDs
+# We can access each table using activity_tables[activity_name]
+"""print("relationship between event and object types for each activity:")
+print(relations)
+print("Filtering event to object relationship tables by activity:")
+print(relationship_df)
+"""
+'''for activity in activities_in_ocel:
+    print(f"Table for activity '{activity}':")
+    print(activity_tables[activity])
+    print("---------------------------------")
+'''
+
+# Now we will give an object type pair (t1,t2) and we will get the list of events and associated activities where both object types are
+# involved. And the output will be multiple lists where each list will be for  pair of objects invoved in the event
+def get_events_for_object_type_pair(object_type1, object_type2):
+    # filter the relationship_df to find objects of the specified types and save in separate lists
+    objects_in_type1 = relations[relations["ocel:type"] == object_type1]["ocel:oid"].unique()
+    objects_in_type2 = relations[relations["ocel:type"] == object_type2]["ocel:oid"].unique()
+   
+    result = []
+    # here we will have a nested for loop to iterate through all combinations of objects from both types
+    for obj2 in objects_in_type2:
+        for obj1 in objects_in_type1:
+             # call the function get_events_for_object_pair for each pair of objects in the two lists
+            events = get_events_for_object_pair(obj1, obj2)
+            if events:
+                result.append(events)
+    # sorting the result in such way thet ('e1', 'collect'), ('e2', 'collect'), ('e3', 'assemble_h') ('e4', 'assemble_h').. etc
+              # Sorting by event_id in the first tuple of each sublist
+    return result
+# We want to get the list of event and associated activities for a pair of objects. for instance. if we give object pair (o1,o2) 
+# and we want to get the list of events and associated activities where both objects are involved. 
+# And the output would be a list of tuples (event_id, activity) which will be in chronological order e.g e1, e2, e3, ...
+def get_events_for_object_pair(object_id1, object_id2):
+    # Filter the relations to find events involving both objects
+    events_with_object1 = relations[relations["ocel:oid"] == object_id1]["ocel:eid"].unique()
+    events_with_object2 = relations[relations["ocel:oid"] == object_id2]["ocel:eid"].unique()
+    # Find common events involving both objects
+    common_events = set(events_with_object1).intersection(set(events_with_object2))
+    # Get the activities associated with these common events
+    event_activity_list = []
+    for event_id in common_events:
+        activity = ocel.events[ocel.events["ocel:eid"] == event_id]["ocel:activity"].values[0]
+        event_activity_list.append((event_id, object_id1, object_id2, activity))
+    return event_activity_list
+events_activities = get_events_for_object_type_pair(object_id1, object_id2)
+# sort each sublist in events_activities by event_id
+for sublist in events_activities:
+    sublist.sort(key=lambda x: x[0])
+if not events_activities:
+    print(f"No common events found involving both objects '{object_id1}' and '{object_id2}'.")
+
+# Now classifying the activities based on their occurrence in the sublists, assign a subset of the set of labels {CREATE, DELETE, MAINTAIN} as follows:
+# CREATE: if the activity appears at the beginning of the sublists
+# DELETE: if the activity appears at the end of the sublists
+# MAINTAIN: if the activity appears in the middle of the sublists
+# Note: activities can have multiple labels if they appear in multiple positions in different sublists
+activity_labels = {}
+for sublist in events_activities:
+    if not sublist:
+        continue
+    # First activity in the sublist
+    first_activity = sublist[0][3]
+    if first_activity not in activity_labels:
+        activity_labels[first_activity] = set()
+    activity_labels[first_activity].add("CREATE")
+    
+    # Last activity in the sublist
+    last_activity = sublist[-1][3]
+    if last_activity not in activity_labels:
+        activity_labels[last_activity] = set()
+    activity_labels[last_activity].add("DELETE")
+    
+    # Middle activities in the sublist
+    for item in sublist[1:-1]:
+        middle_activity = item[3]
+        if middle_activity not in activity_labels:
+            activity_labels[middle_activity] = set()
+        activity_labels[middle_activity].add("MAINTAIN")
+# Display the activity labels
+print("Activity Labels:")
+for activity, labels in activity_labels.items():
+    print(f"Activity: {activity}, Labels: {labels}")
+# calculating the time taken for execution of whole code
+end_time = time.time()
+execution_time = end_time - start_time
+print(f"Time taken for execution: {execution_time} seconds")
