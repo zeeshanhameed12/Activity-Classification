@@ -1,12 +1,14 @@
 # Activity-Classification
-Overview
-This Python script processes an OCEL (Object-Centric Event Log) to extract and analyze event-to-object relationships. It allows users to:
-- Load OCEL logs from XML files.
-- Extract unique activities and object types.
-- Retrieve and display event-object relationships.
-- Filter events involving two specified object types.
-- Classify activities as `CREATE`, `DELETE`, or `MAINTAIN` based on their occurrence in event sequences.
-- Track and display the execution time of the script.
+**Overview**
+This Python script processes an OCEL (Object-Centric Event Log) to extract and analyze event-to-object relationships. The script works as follows:
+- It reads the OCEL log and displays a list of object types present in the log.
+- The user selects a pair of object types (t1, t2).
+- The system iterates through all combinations of objects from both types (t1 and t2), and retrieves events and associated activities where both object types are involved.
+- The result will consist of multiple lists for multiple object pairs (o1, o2), showing event and associated activities for each pair of objects.
+
+The script also:
+- Classifies activities as `CREATE`, `DELETE`, or `MAINTAIN` based on their occurrence in event sequences.
+- Tracks and displays the execution time of the script.
 Prerequisites
 To run this script, ensure you have the following dependencies installed:
 - Python 3.x
