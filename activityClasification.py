@@ -52,18 +52,46 @@ def get_events_for_object_pair(object_id1, object_id2, relations, ocel):
     
     return event_activity_list
 
+
+def get_events_for_object_type_pair_via_join(object_type1, object_type2, relations, ocel):
+    """Find events and activities involving pairs of objects from two given object types."""
+    relations = relations.drop('ocel:qualifier', axis=1)
+    relations_t1 = relations[relations["ocel:type"] == object_type1]
+    relations_t2 = relations[relations["ocel:type"] == object_type2]
+    
+    reljoin = relations_t1.merge(relations_t2, on="ocel:eid", suffixes=["_t1", "_t2"]) # do the join
+
+    # drop some columns, not sure if this is of any help
+    reljoin.drop(columns=['ocel:type_t1', 'ocel:type_t2', 'ocel:activity_t2', 'ocel:timestamp_t2'], inplace=True)
+
+    result = []
+    reljg = reljoin.groupby(by = ["ocel:oid_t1", "ocel:oid_t2"])
+    for (object_pair, _) in reljg:
+        #print("key", object_pair )
+        g = reljg.get_group(object_pair)
+        events = []
+        for e in g.itertuples(index=False):
+          eid = e[0] # event id
+          activity = e[1]
+          timestamp = e[2]
+          events.append((eid, object_pair[0], object_pair[1], activity, timestamp))
+        events.sort(key=lambda e: e[4])
+        #acts = [ a for _,_,_,a,_ in events ]
+        #print(acts)
+        result.append(events)
+    return result
+
 def get_events_for_object_type_pair(object_type1, object_type2, relations, ocel):
     """Find events and activities involving pairs of objects from two given object types."""
     objects_in_type1 = relations[relations["ocel:type"] == object_type1]["ocel:oid"].unique()
     objects_in_type2 = relations[relations["ocel:type"] == object_type2]["ocel:oid"].unique()
-    
+
     result = []
     for obj2 in objects_in_type2:
         for obj1 in objects_in_type1:
             events = get_events_for_object_pair(obj1, obj2, relations, ocel)
             if events:
                 result.append(events)
-    
     return result
 
 def classify_activities(events_activities):
@@ -96,6 +124,7 @@ def main():
     #filename = "proceduretopay.xml"
     filename = "post_ocel_inventory_management.xml"
     ocel = load_ocel_log(filename)
+    DO_JOIN = True
     
     # Extract activities and object types
     activities, object_types = get_activities_and_object_types(ocel)
@@ -106,12 +135,15 @@ def main():
     # Process event-object relationships
     relationship_df = process_event_object_relations(ocel)
     
+    events_activities = None
     # Get events and associated activities for the object type pair
-    events_activities = get_events_for_object_type_pair(object_id1, object_id2, ocel.relations, ocel)
-    
-    # Sort events chronologically
-    for sublist in events_activities:
-        sublist.sort(key=lambda x: x[0])
+    if DO_JOIN:
+        events_activities = get_events_for_object_type_pair_via_join(object_id1, object_id2, ocel.relations, ocel)
+    else:
+        events_activities = get_events_for_object_type_pair(object_id1, object_id2, ocel.relations, ocel)
+        # Sort events chronologically
+        for sublist in events_activities:
+            sublist.sort(key=lambda x: x[0])
     
     if not events_activities:
         print(f"No common events found involving both objects '{object_id1}' and '{object_id2}'.")
