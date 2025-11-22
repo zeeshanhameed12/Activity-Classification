@@ -1,0 +1,20 @@
+{
+    "reference types": { 
+        "Create Goods Receipt": "goods receipt",
+        "Execute Payment": "payment", 
+        "Delegate Purchase Requisition Approval": "purchase_requisition", 
+        "Create Request for Quotation": "quotation", 
+        "Approve Purchase Requisition": "purchase_requisition", 
+        "Perform Two-Way Match": "invoice receipt",
+        "Create Purchase Order": "purchase_order", 
+        "Approve Purchase Order": "purchase_order", 
+        "Create Purchase Requisition": "purchase_requisition",
+        "Create Invoice Receipt": "invoice receipt"
+    },
+    "relationships": {
+      "one-to-many": [
+        ["invoice receipt", "goods receipt"],
+        ["payment", "goods receipt"]
+      ]
+    }
+}
